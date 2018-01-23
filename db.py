@@ -36,7 +36,8 @@ class DB(object):
         conn.close()
         return res
         
-
+    def savetocache(self, catchkey, content):
+        self.exesql("insert into datacache values(?,?)",[catchkey , content])
 
 
 

@@ -13,6 +13,7 @@ from urllib.parse import urlparse, parse_qs,urlencode
 import urllib
 import collections
 from flask import Response
+from django.db.backends.dummy.base import ignore
 
 # https://www.ntu.edu.sg/home/ehchua/programming/webprogramming/Python3_Flask.html
 # https://www.ntu.edu.sg/home/ehchua/programming/webprogramming/Python2_Apps.html#virtualenv
@@ -27,12 +28,11 @@ CORS(app)
 def main(path):
 	
 	paramdict = getparamdict()
-	catchkey = request.path + "?" + urlencode(paramdict)
+	cachekey = request.path + "?" + urlencode(paramdict)
 	
 # 	urlencode(querydict)
 	
-	data = db.getdatabyurl(catchkey)
-	
+	data = db.getdatabyurl(cachekey)
 # 	parsere = urlparse(request.url)
 	
 # 	return r.text
@@ -43,37 +43,61 @@ def main(path):
 		if(request.method == "GET"):
 			url = remote + request.path + "?" + request.query_string.decode("utf-8")
 			r = requests.get(url,verify=False)
-			dataresp = make_response(r.text)
 		elif(request.method  == "POST"):
 			r = requests.post(remote + request.path, data=request.form, verify=False)
-			dataresp = make_response(r.text)
-			
 			
 		if(r.status_code == 200):
-			db.exesql("insert into datacache values(?,?)",[catchkey ,r.text])
-			data = r.text
-			dataresp = make_response(r.text)
+			data = parseResult(r.text)
+			if(data["status"] == "0"):
+				db.savetocache(cachekey, r.text)
+				dataresp = make_response(r.text)
 		else:
 # 			make_response(r.content.decode("utf-8"), r.status_code)
 			dataresp =  Response(r.content.decode("utf-8"), status=r.status_code)
 		
 	else:
+# 		get data from cache 
 		dataresp = make_response(data[1])
 # 	resp.headers["Access-Control-Allow-Origin"] = "*"
 # 	resp.headers["Access-Control-Allow-Credentials"] = "*"
 	return dataresp
 
+def useCache():
+	querydict = parse_qs(urlparse(request.url).query)
+	return "TRUE". querydict["cache"] == True
+		
+
+def parseResult(data):
+	strlist = data.splitlines()
+	result = {}
+	result["data"] = []
+	
+	for i in range(0,len(strlist)):
+		cols = strlist[i].split("\t")		
+		if(i == 0):
+			if(len(cols) < 4):
+				result["status"] = "2"
+				result["message"] = "API data format error"
+				continue
+			result["name"] = cols[0]
+			result["status"] = cols[1]
+			result["message"] = cols[2]
+			result["timestamp"] = cols[3]
+			result["headers"] = cols
+		else:
+			result["data"].append(cols)
+	return result
+		
 def getparamdict():
+	ignoreparams = ['SESN', 'GUID']
 	if(request.method == "GET"):
 		querydict = parse_qs(urlparse(request.url).query)
-		querydict.pop('SESN', None)
-		querydict.pop('GUID', None)
+		map(lambda m: querydict.pop(m, None), ignoreparams)
 		sortedquerydict = collections.OrderedDict(sorted(querydict.items()))
 		return sortedquerydict
 	elif(request.method == "POST"):
 		querydict = dict(request.form)
-		querydict.pop('SESN', None)
-		querydict.pop('GUID', None)
+		querydict = parse_qs(urlparse(request.url).query)
 		sortedquerydict = collections.OrderedDict(sorted(querydict.items()))
 		return sortedquerydict
 		
