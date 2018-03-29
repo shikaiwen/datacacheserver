@@ -15,6 +15,7 @@ import collections
 from flask import Response
 from django.db.backends.dummy.base import ignore
 
+# 出现的问题的解决方案
 # https://www.ntu.edu.sg/home/ehchua/programming/webprogramming/Python3_Flask.html
 # https://www.ntu.edu.sg/home/ehchua/programming/webprogramming/Python2_Apps.html#virtualenv
 
